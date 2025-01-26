@@ -333,28 +333,41 @@ def display_predictions(accident_prediction, behavior_prediction):
         2: "Aggressive Driving"
     }
 
-    # Display predictions in cards
+    # Define colors for accident prediction card based on the risk level
+    accident_colors = {
+        0: "#4CAF50",  # Green for No Accident Risk
+        1: "#FFC107",  # Yellow for Moderate Risk
+        2: "#FF5252"   # Red for High Accident Risk
+    }
+
+    # Get the appropriate color for the current prediction
+    accident_color = accident_colors[accident_prediction]
+
+    # Display predictions in styled cards
     st.markdown("<div class='container-box'>", unsafe_allow_html=True)
     st.markdown("<h2>Prediction Results</h2>", unsafe_allow_html=True)
     st.markdown("<hr class='custom-divider'>", unsafe_allow_html=True)
 
+    # Accident Prediction Card with dynamic color
     st.markdown(f"""
-        <div class="metric">
+        <div class="metric" style="background-color: {accident_color}; border-radius: 10px; padding: 20px; color: white;">
             <i class="fas fa-exclamation-triangle icon"></i>
             <h2>{accident_labels[accident_prediction]}</h2>
             <p>Accident Risk</p>
         </div>
     """, unsafe_allow_html=True)
 
+    # Driver Behavior Prediction Card
     st.markdown(f"""
-        <div class="metric">
+        <div class="metric" style="background-color: #2196F3; border-radius: 10px; padding: 20px; color: white;">
             <i class="fas fa-car icon"></i>
             <h2>{behavior_labels[behavior_prediction]}</h2>
             <p>Driver Behavior</p>
         </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 def fetch_numeric_features():
@@ -381,7 +394,17 @@ def fetch_numeric_features():
     else:
         return None
 
-# Real-Time Data Tab
+import streamlit as st
+import subprocess
+import os
+import signal
+import time
+
+# Store the process ID in the session state
+if "data_gen_pid" not in st.session_state:
+    st.session_state.data_gen_pid = None
+
+
 def tabs(username):
     st.title(f"Welcome, {username}")
     tab1 = st.tabs(["Real-Time Metrics and Predictions"])[0]
@@ -407,30 +430,11 @@ def tabs(username):
                 latest_numeric_data = fetch_numeric_features()
 
                 if latest_numeric_data:
-                    # scaler, accident_model, behavior_model = load_models_and_scaler()
-                    # new_data = pd.DataFrame([latest_numeric_data])
-                    # new_data_scaled = scaler.transform(new_data)
-
-                    # accident_prediction = accident_model.predict(new_data_scaled)[0]
-                    # behavior_prediction = behavior_model.predict(new_data_scaled)[0]
                     with prediction_placeholder.container():
-
-
                         accident_prediction, behavior_prediction = check_and_send_sms_for_accident(latest_numeric_data)
                         display_predictions(accident_prediction, behavior_prediction)
                         
             time.sleep(5)  # Refresh every 5 seconds
-
-
-
-    
-
-    
-
-
-
-
-
 
 
 # Main Function
@@ -446,10 +450,37 @@ def main():
 
     # Check login status
     if st.session_state["logged_in"]:
+        # Display the data generation control buttons in the sidebar
+        with st.sidebar:
+            st.header("Data Generation Control")
+            if st.button("Start Data Generation"):
+                if st.session_state.data_gen_pid:
+                    st.warning("Data generation is already running!")
+                else:
+                    try:
+                        # Start the data generation script
+                        process = subprocess.Popen(["python", "data2.py"])
+                        st.session_state.data_gen_pid = process.pid
+                        st.success("Data generation started!")
+                        st.write(f"Process ID: {st.session_state.data_gen_pid}")
+                    except Exception as e:
+                        st.error(f"An error occurred while starting: {e}")
+
+            if st.button("Stop Data Generation"):
+                if st.session_state.data_gen_pid:
+                    try:
+                        # Terminate the process using its PID
+                        os.kill(st.session_state.data_gen_pid, signal.SIGTERM)
+                        st.success("Data generation stopped!")
+                        st.session_state.data_gen_pid = None
+                    except Exception as e:
+                        st.error(f"An error occurred while stopping: {e}")
+                else:
+                    st.warning("No data generation process is running.")
+
         # Render the main tabs interface
         try:
             tabs(st.session_state["username"])
-            
         except Exception as e:
             st.error(f"An error occurred while loading the main interface: {e}")
     else:
@@ -466,8 +497,7 @@ def main():
             except Exception as e:
                 st.error(f"An error occurred during login: {e}")
 
+
 # Entry point
 if __name__ == "__main__":
     main()
-    
-
